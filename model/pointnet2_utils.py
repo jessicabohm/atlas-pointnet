@@ -109,7 +109,7 @@ def farthest_point_sample(xyz, npoint):
    return centroids
 
 
-def query_ball_point(radius, nsample, xyz, new_xyz):
+def query_ball_point_prev(radius, nsample, xyz, new_xyz):
    """
    Input:
       radius: local region radius
@@ -144,8 +144,33 @@ def query_ball_point(radius, nsample, xyz, new_xyz):
    # logger.info(f'qb: group_idx={group_idx.shape} {group_idx.min()} {group_idx.max()}')
    return group_idx
 
+def query_ball_point(radius, nsample, xyz, new_xyz):
+    """
+    Input:
+        radius: local region radius
+        nsample: max sample number in local region
+        xyz: all points, [B, N, 3]
+        new_xyz: query points, [B, S, 3]
+    Return:
+        group_idx: grouped points index, [B, S, nsample] - selected by closest to centroid
+    """
+    B, N, C = xyz.shape
+    _, S, _ = new_xyz.shape
 
-def sample_and_group(npoint, radius, nsample, xyz, points):
+    sqrdists = square_distance(new_xyz, xyz)
+    sorted_sqrdists, sorted_sqrdist_idxs = torch.sort(sqrdists)
+    sorted_sqrdists = sorted_sqrdists[:, :, :nsample]
+    sorted_sqrdist_idxs = sorted_sqrdist_idxs[:, :, :nsample]
+
+    group_first = sorted_sqrdist_idxs[:, :, 0].view(B, S, 1).repeat([1, 1, nsample])
+    out_of_ball = (sorted_sqrdists > radius**2)
+    # set points not in radius to the centroid idx
+    sorted_sqrdist_idxs[out_of_ball] = group_first[out_of_ball]
+    
+    return sorted_sqrdist_idxs
+
+
+def sample_and_group(npoint, radius, nsample, xyz, points, tracks=[]):
    """
    Input:
       npoint:
@@ -161,10 +186,14 @@ def sample_and_group(npoint, radius, nsample, xyz, points):
    B, N, C = xyz.shape
    S = npoint
    # get npoint indices for each input point set
-   fps_idx = farthest_point_sample(xyz, npoint) # [B, npoint]
+   if len(tracks) != 0:
+      new_xyz = tracks
+   else:
+      centroids = farthest_point_sample(xyz, npoint) # [B, npoint]
+      new_xyz = index_points(xyz, centroids) # [B, npoint, 3]
+
    # logger.info(f'sg: fps_idx.shape={fps_idx.shape}')
 
-   new_xyz = index_points(xyz, fps_idx) # [B, npoint, 3]
    # logger.info(f'sg: new_xyz.shape={new_xyz.shape}')
    idx = query_ball_point(radius, nsample, xyz, new_xyz) # [B, npoint, nsample]
    # logger.info(f'sg: idx.shape={idx.shape} {idx.max()}')
@@ -211,7 +240,7 @@ class PointNetSetAbstraction(nn.Module):
          last_channel = out_channel
       self.group_all = group_all
 
-   def forward(self, xyz, points):
+   def forward(self, xyz, points, tracks=[]):
       """
       Input:
          xyz: input points position data, [B, N, C]
@@ -225,7 +254,7 @@ class PointNetSetAbstraction(nn.Module):
       if self.group_all:
          new_xyz, new_points = sample_and_group_all(xyz, points)
       else:
-         new_xyz, new_points = sample_and_group(self.npoint, self.radius, self.nsample, xyz, points)
+         new_xyz, new_points = sample_and_group(self.npoint, self.radius, self.nsample, xyz, points, tracks)
       
       # logger.info(f'B new_xyz.shape={new_xyz.shape} new_points.shape={new_points.shape}')
       new_points = new_points.permute(0, 3, 2, 1) # [B, C+D, nsample,npoint]
@@ -239,7 +268,7 @@ class PointNetSetAbstraction(nn.Module):
          # logger.info(f'D new_points.shape={new_points.shape}')
 
       new_points = torch.max(new_points, 2)[0]
-      new_points = new_points.permute(0, 2, 1) # [B, nsample, D']
+      new_points = new_points.permute(0, 2, 1) # [B, nsample, D'] # hmmm npoint instead of nsample ??
       # new_xyz = new_xyz.permute(0, 2, 1)
       # logger.info(f'E new_xyz.shape={new_xyz.shape} new_points.shape={new_points.shape}')
       return new_xyz, new_points
@@ -269,7 +298,7 @@ class PointNetSetAbstractionMsg(nn.Module):
          self.conv_blocks.append(convs)
          self.bn_blocks.append(bns)
 
-   def forward(self, xyz, points):
+   def forward(self, xyz, points, tracks=[]):
       """
       Input:
          xyz: input points position data, [B, C, N]
@@ -283,8 +312,13 @@ class PointNetSetAbstractionMsg(nn.Module):
       #    points = points.permute(0, 2, 1)
 
       B, N, C = xyz.shape
-      S = self.npoint
-      new_xyz = index_points(xyz, farthest_point_sample(xyz, S))
+      S = self.npoint if len(tracks) == 0 else tracks.shape[1]
+
+      if len(tracks) == 0:
+         new_xyz = index_points(xyz, farthest_point_sample(xyz, S))
+      else:
+         new_xyz = tracks
+
       new_points_list = []
       for i, radius in enumerate(self.radius_list):
          K = self.nsample_list[i]
@@ -387,7 +421,7 @@ class PointNetFeaturePropagation(nn.Module):
       #   logger.error('interpolated_points is nan')
 
       if points1 is not None:
-         # points1 = points1.permute(0, 2, 1)
+         points1 = points1.permute(0, 2, 1)
          new_points = torch.cat([points1, interpolated_points], dim=-1)
       else:
          new_points = interpolated_points

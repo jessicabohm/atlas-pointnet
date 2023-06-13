@@ -1,0 +1,47 @@
+{
+   "model": {
+      "name":                          "pointnet2",
+      "knn":                           20,
+      "conv2d_size":                   128,
+      "dropout":                       0.4,
+      "use_kernel_reg":                false,
+      "kernel_reg":                    1e-3,
+      "mixed_precisionBF":             "mixed_bfloat16",
+      "mixed_precision":               false
+   },
+   "optimizer": {
+      "name":                          "Adam",
+      "args": {
+         "lr":                         0.01
+      }
+   },
+   "lr_schedule": {
+      "name":                          "MultiStepLR",
+      "args": {
+         "milestones":                 [2,4,6,10,14,18,20],
+         "gamma":                      0.5
+      }
+   },
+   "loss": {
+      "name":                          "binary_cross_entropy",
+      "args": {
+         "reduction":                  "none"
+      },
+      "balanced":                      true
+   },
+   "accuracy": {
+      "name":                          "softmax_accuracy"
+   },
+   "data": {
+      "batch_size":                    1,
+      "dtype":                         "float32",
+      "num_features":                  5,
+      "num_channels":                  3,
+      "num_classes":                   1,
+      "num_points":                    15000
+   },
+   "training": {
+      "epochs":                        40,
+      "status":                        10
+   }
+}
