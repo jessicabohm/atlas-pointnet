@@ -15,10 +15,10 @@ def get_model(config):
 class PointNet2(nn.Module):
    def __init__(self, num_classes, num_features):
       super(PointNet2, self).__init__()
-      self.sa1 = PointNetSetAbstraction(npoint=150, radius=0.1, nsample=100, in_channel=num_features, mlp=[64, 64, 128], group_all=False)
-      self.sa2 = PointNetSetAbstraction(npoint=100, radius=0.2, nsample=50, in_channel=128, mlp=[128, 128, 256], group_all=False)
-      self.sa3 = PointNetSetAbstraction(npoint=6, radius=0.4, nsample=20, in_channel=256, mlp=[256, 512, 512], group_all=False)
-      self.sa4 = PointNetSetAbstraction(npoint=0, radius=0.4, nsample=5, in_channel=512, mlp=[512, 512, 1024], group_all=True)
+      self.sa1 = PointNetSetAbstraction(npoint=75, radius=0.2, nsample=100, in_channel=num_features, mlp=[64, 64, 128], group_all=False)
+      self.sa2 = PointNetSetAbstraction(npoint=50, radius=0.4, nsample=30, in_channel=128, mlp=[128, 128, 256], group_all=False)
+      self.sa3 = PointNetSetAbstraction(npoint=0, radius=0.1, nsample=20, in_channel=256, mlp=[256, 512, 512], group_all=False)
+      self.sa4 = PointNetSetAbstraction(npoint=4, radius=0.2, nsample=19, in_channel=512, mlp=[512, 512, 1024], group_all=False)
       self.fp4 = PointNetFeaturePropagation(in_channel=1536, mlp=[256, 256])
       self.fp3 = PointNetFeaturePropagation(in_channel=512, mlp=[256, 256])
       self.fp2 = PointNetFeaturePropagation(in_channel=384, mlp=[256, 128])
@@ -72,8 +72,8 @@ class PointNet2(nn.Module):
 class PointNet2MSG(nn.Module):
    def __init__(self, num_classes, num_features):
       super(PointNet2MSG, self).__init__()
-      self.sa1 = PointNetSetAbstractionMsg(npoint=5, radius_list=[0.2, 0.2, 0.4, 0.4], nsample_list=[150, 100, 50, 10], in_channel=num_features, mlp_list=[[32, 32, 64], [64, 64, 128], [128, 128, 256], [256, 256, 512]])
-      self.sa2 = PointNetSetAbstraction(npoint=0, radius=0.2, nsample=50, in_channel=512+256+128+64, mlp=[512, 512, 1024], group_all=True)
+      self.sa1 = PointNetSetAbstractionMsg(npoint=0, radius_list=[0.2, 0.2, 0.1, 0.05], nsample_list=[150, 100, 75, 50], in_channel=num_features, mlp_list=[[32, 32, 64], [64, 64, 128], [128, 128, 256], [256, 256, 512]])
+      self.sa2 = PointNetSetAbstraction(npoint=4, radius=0.2, nsample=19, in_channel=512+256+128+64, mlp=[512, 512, 1024], group_all=False)
       self.fp2 = PointNetFeaturePropagation(in_channel=1024+512+256+128+64, mlp=[256, 256])
       self.fp1 = PointNetFeaturePropagation(in_channel=256, mlp=[128, 128, 128])
       self.conv1 = nn.Conv1d(128, 128, 1)
@@ -100,7 +100,8 @@ class PointNet2MSG(nn.Module):
       l1_xyz, l1_points = self.sa1(l0_xyz, l0_points, tracks)
       l2_xyz, l2_points = self.sa2(l1_xyz, l1_points)
 
-      # Feature Propagation layers
+      # Feature Propagation layers1
+      
       l1_points = self.fp2(l1_xyz, l2_xyz, l1_points, l2_points)
       l0_points = self.fp1(l0_xyz, l1_xyz, None, l1_points)
 

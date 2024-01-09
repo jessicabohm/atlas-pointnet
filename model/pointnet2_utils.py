@@ -339,8 +339,10 @@ class PointNetSetAbstractionMsg(nn.Module):
          new_points = torch.max(grouped_points, 2)[0]  # [B, D', S]
          new_points_list.append(new_points)
 
-      # new_xyz = new_xyz.permute(0, 2, 1)
       new_points_concat = torch.cat(new_points_list, dim=1)
+
+      #new_xyz = new_xyz.permute(0, 2, 1)
+      new_points_concat = new_points_concat.permute(0, 2, 1)
       return new_xyz, new_points_concat
 
    def to(self, memory_format):
@@ -379,7 +381,6 @@ class PointNetFeaturePropagation(nn.Module):
       # points2 = points2.permute(0, 2, 1)
       B, N, C = xyz1.shape
       _, S, _ = xyz2.shape
-
 
       # if torch.any(torch.isnan(points2)):
       #   logger.error('points2 is nan')
@@ -421,7 +422,7 @@ class PointNetFeaturePropagation(nn.Module):
       #   logger.error('interpolated_points is nan')
 
       if points1 is not None:
-         points1 = points1.permute(0, 2, 1)
+         #points1 = points1.permute(0, 2, 1)
          new_points = torch.cat([points1, interpolated_points], dim=-1)
       else:
          new_points = interpolated_points
